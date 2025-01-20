@@ -6,7 +6,7 @@ from src.config import CONFIG
 from src.utils.event_publisher import EventPublisher
 import logging
 
-class OzonAdvInfo:
+class OzonAdvInfoUseCase:
     async def get_adv_info_ozon():
         ozon = OzonApiClient(api_keys=CONFIG.API_KEYS, request=APIClient())
         publisher = EventPublisher(project_id=CONFIG.PROJECT_ID)
