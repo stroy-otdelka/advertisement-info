@@ -1,9 +1,8 @@
 from typing import Union
 from uuid import uuid4
 from datetime import datetime
-from dataclasses import dataclass, field
-
-from . import model
+from dataclasses import dataclass, field    
+from src.application import model
 from src.application.schema import Notification, Sku, Product
 
 

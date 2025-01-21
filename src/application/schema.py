@@ -1,7 +1,9 @@
+from __future__ import annotations
 from collections import namedtuple
 from dataclasses import dataclass
 from enum import StrEnum
-from uuid import UUID
+from dataclasses import dataclass, asdict
+from datetime import datetime
 
 
 @dataclass
@@ -53,33 +55,6 @@ class MarketplacesEnum(StrEnum):
     WB = "wb"
     OZON = "ozon"
     YANDEX_MARKET = "yandex_market"
-
-
-@dataclass
-class Product:
-    """Общая модель продукта для маркетплейс клиентов"""
-    sku: int
-    marketplace: MarketplacesEnum
-    price: int
-    discount_price: int
-    sales: int
-    seller: LegalEntitiesEnum
-    quantity: int
-    name: str
-    internal_id: UUID | None = None
-    in_supplies: int | None = None  # для озон-поставок
-    actions: str | None = None  # для озон-продуктов
-    min_price: int | None = None # для озон-продуктов
-    adv: str | None = None  # для озон-продуктов
-    vendor_code: str | None = None # для яндекс маркета
-
-    def __hash__(self):
-        return hash(self.sku)
-
-    def __eq__(self, other):
-        if not isinstance(other, Product):
-            return False
-        return self.sku == other.sku
 
 
 @dataclass
@@ -183,12 +158,6 @@ class MatchedProduct:
             in_supplies=int(self.in_supplies),
             actions=str(self.actions),
         )
-
-
-from __future__ import annotations
-from dataclasses import dataclass, asdict
-from datetime import datetime
-
 
 @dataclass
 class DTO:

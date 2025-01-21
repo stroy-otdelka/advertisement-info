@@ -1,5 +1,5 @@
 from src.adapters.marketplaces.ozon import OzonApiClient
-from src.application.schema import FoundZeroStockEvent
+from src.application.events import FoundZeroStockEvent
 from itertools import chain
 from src.adapters.api_client import APIClient
 from src.config import CONFIG
