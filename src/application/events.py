@@ -136,3 +136,11 @@ class LowOnStock(PubSubNotification, Event):
             "time": self.time.isoformat(),
             "data": {"notification": self.data.get("notification").to_dict()},
         }
+
+
+@dataclass
+class FoundZeroStockEvent:
+    sku: int
+    legal_entity: str
+    adv_id: str
+

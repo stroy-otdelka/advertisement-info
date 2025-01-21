@@ -274,12 +274,3 @@ class Product(DTO):
     stock_fbs: int
     sales: list[Sale]
     internal_id: int | None = "NoneTestSTR"
-
-
-
-@dataclass
-class FoundZeroStockEvent:
-    sku: int
-    legal_entity: str
-    adv_id: str
-
