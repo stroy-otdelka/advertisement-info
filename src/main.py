@@ -1,5 +1,3 @@
-import sys
-sys.path.append(r"E:\vscode_stuff\twr_first\advertisement-info")
 import asyncio
 import functions_framework
 from src.application.usecase import OzonAdvInfoUseCase
