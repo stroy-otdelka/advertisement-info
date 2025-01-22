@@ -44,13 +44,13 @@ class OzonAdvInfoUseCase:
 
             for sku in zero_stock_skus:
                 if sku in amo:
-                    event = FoundZeroStockEvent(sku=sku, legal_entity="Амодекор", adv_id="0")
+                    event = FoundZeroStockEvent(sku=sku, legal_entity="Амодекор", adv_id=amo_action_skus["adv_id"])
                     logger.info(f"Товар {sku} из Амодекор.")
                 elif sku in so:
-                    event = FoundZeroStockEvent(sku=sku, legal_entity="СтройОтделка", adv_id="0")
+                    event = FoundZeroStockEvent(sku=sku, legal_entity="СтройОтделка", adv_id=so_action_skus["adv_id"])
                     logger.info(f"Товар {sku} из СтройОтделка.")
                 elif sku in orion:
-                    event = FoundZeroStockEvent(sku=sku, legal_entity="Орион", adv_id="0")
+                    event = FoundZeroStockEvent(sku=sku, legal_entity="Орион", adv_id=orion_action_skus["adv_id"])
                     logger.info(f"Товар {sku} из Орион.")
 
                 if event:

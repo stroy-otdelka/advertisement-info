@@ -222,14 +222,29 @@ class OzonApiClient(AbstractOzonApiClient):
 
         return result
 
+    async def _get_adv_object_id(self, seller: str, campaign_id: int) -> str:
+        """
+        Возвращает ID рекламируемого объекта для конкретной кампании.
+        """
+        response = await self._api_client.get(
+            f"https://api-performance.ozon.ru:443/api/client/campaign/{campaign_id}/objects",
+            headers={"Authorization": f"Bearer {await self._get_token(seller)}"}
+        )       
+        if response and response.get("list"):
+            return response["list"][0]["id"]
+        return ""
+
     async def get_adv_info(self, seller: str, **kwargs: Any) -> dict[str, set] | None:
         """
-        Возвращает все артикулы товаров, которые в активных рекламных компаниях (Трафарет и продвижение в поиске)
+        Возвращает все артикулы товаров, 
+        которые в активных рекламных компаниях (Трафарет и продвижение в поиске)
+        и айди рекламируемного объекта
         """
         if self._keys[seller].get("ozon") is None:
             return dict()
+        
         sku_ads_campaigns = await self._get_all_adv(seller)
-        result = {"sku": set(), "search": set()}
+        result = {"sku": set(), "search": set(), "adv_id": ""}
 
         # Создание задач для выполнения запросов асинхронно по лимиту api
         tasks = []
@@ -252,6 +267,9 @@ class OzonApiClient(AbstractOzonApiClient):
 
         for search_ad in search_ads:
             result["search"].add(int(search_ad['sku']))
+
+        if sku_ads_campaigns:
+            result["adv_id"] = await self._get_adv_object_id(seller, sku_ads_campaigns[0]["id"])
 
         return result
 
