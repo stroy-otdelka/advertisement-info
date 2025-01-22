@@ -1,8 +1,5 @@
 import asyncio
 import logging
-import random
-from collections import defaultdict
-from datetime import datetime, timedelta
 from typing import Any
 import requests
 from src.application.interfaces.api_client import AbstractOzonApiClient, AbstractApiClient
@@ -11,7 +8,6 @@ logger = logging.getLogger(__name__)
 
 
 class OzonApiClient(AbstractOzonApiClient):
-    # TODO: удалить лишнее
     def __init__(self, request: AbstractApiClient, api_keys: dict):
         self._api_client = request
         self._keys = api_keys
@@ -59,72 +55,6 @@ class OzonApiClient(AbstractOzonApiClient):
             result.extend(res)
             await asyncio.sleep(1)
         return result
-
-    async def get_sale_ozon(self, seller: str) -> dict:
-        """Акции"""
-        if self._keys[seller].get("ozon") is None:
-            return dict()
-        actions = await self._api_client.get(
-            "https://api-seller.ozon.ru/v1/actions",
-            headers=self._get_headers(seller)
-        )
-        result = {}
-
-        if not actions:
-            return {}
-
-        actions = actions["result"]
-
-        for action in actions:
-            product_ids = set()
-            offset = 0
-            limit = 100
-
-            while True:
-                products_ozon: dict = await self._api_client.post(
-                    url="https://api-seller.ozon.ru/v1/actions/products",
-                    headers=self._get_headers(seller),
-                    json={"action_id": action["id"], "limit": limit, "offset": offset}
-                )
-
-                if not products_ozon["result"]["products"]:
-                    break
-
-                for product in products_ozon["result"]["products"]:
-                    product_ids.add(product["id"])
-
-                offset += limit
-
-            result[(action["id"], action["title"])] = product_ids
-
-        return result
-
-    async def get_sales_ozon(self, seller: str) -> list:
-        """Продажи"""
-        if self._keys[seller].get("ozon") is None:
-            return []
-        while True:
-            body = {
-                "date_from": (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d"),
-                "date_to": datetime.now().strftime("%Y-%m-%d"),
-                "metrics": ["ordered_units"],
-                "dimension": ["sku", "month"],
-                "filters": [],
-                "sort": [{"key": "ordered_units", "order": "DESC"}],
-                "limit": 1000,
-                "offset": 0,
-            }
-            res = await self._api_client.post(
-                url="https://api-seller.ozon.ru/v1/analytics/data",
-                headers=self._get_headers(seller),
-                json=body,
-            )
-            if not res:
-                await asyncio.sleep(random.randint(10, 20))
-                continue
-            break
-
-        return res.get("result", {}).get("data", [])
 
     async def get_ozon_product(self, vendor_code_wb: str, seller: str) -> dict:
         if self._keys[seller].get("ozon") is None:
@@ -246,7 +176,6 @@ class OzonApiClient(AbstractOzonApiClient):
         sku_ads_campaigns = await self._get_all_adv(seller)
         result = {"sku": set(), "search": set(), "adv_id": ""}
 
-        # Создание задач для выполнения запросов асинхронно по лимиту api
         tasks = []
         api_interaction_limit = 5
         for index in range(0, len(sku_ads_campaigns), api_interaction_limit):
@@ -255,7 +184,6 @@ class OzonApiClient(AbstractOzonApiClient):
                 batch += [self._get_detail_adv(seller, sku_ads_campaigns[index + difference]['id'])]
             tasks.append(batch)
 
-        # Выполнение задач через asyncio.gather()
         for task_group in tasks:
             batch_result = await asyncio.gather(*task_group)
             for campaign in batch_result:
@@ -301,81 +229,4 @@ class OzonApiClient(AbstractOzonApiClient):
             if res.get("last_supply_order_id", 0) == 0:
                 return res.get("supply_order_id", [])
             body["paging"]["from_supply_order_id"] = res["last_supply_order_id"]
-
-    async def _get_bundle_id_for_supplies(
-            self, seller: str,
-            supply_order_id_list: list[int]
-    ) -> set[str]:
-        body = {
-            "order_ids": []
-        }
-        result = set()
-        # Разделение на порции по 50 элементов
-        chunks = [supply_order_id_list[i:i + 50] for i in range(0, len(supply_order_id_list), 50)]
-
-        for chunk in chunks:
-            body["order_ids"] = chunk
-            response = await self._api_client.post(
-                url="https://api-seller.ozon.ru/v2/supply-order/get",
-                json=body,
-                headers=self._get_headers(seller)
-            )
-            if not response:
-                continue
-
-            for order in response["orders"]:
-                for supply in order["supplies"]:
-                    result.add(supply["bundle_id"])
-
-        return result
-
-    async def _get_sku_to_quantity_from_bundle(self, seller: str, bundle_ids: set[str]) -> dict[int, int]:
-        body = {
-            "bundle_ids": list(bundle_ids),
-            "is_asc": True,
-            "limit": 100,
-            "sort_field": "UNSPECIFIED",
-        }
-
-        result = defaultdict(int)
-        while True:
-            res = await self._api_client.post(
-                url="https://api-seller.ozon.ru/v1/supply-order/bundle",
-                json=body,
-                headers=self._get_headers(seller)
-            )
-            if not res:
-                return result
-            for item in res["items"]:
-                result[item["sku"]] += item["quantity"]
-            if not res["has_next"]:
-                return result
-            body["last_id"] = res["last_id"]
-
-    async def get_sku_to_quantity(self, seller: str) -> dict[int, int]:
-        """Получение словаря sku -> quantity"""
-        if self._keys[seller].get("ozon") is None:
-            return dict()
-        supply_ids = await self._get_supplies_id_list(seller)
-        bundle_ids = await self._get_bundle_id_for_supplies(seller, supply_ids)
-        return await self._get_sku_to_quantity_from_bundle(seller, bundle_ids)
-
-    @staticmethod
-    def transliterate(text):
-        # Словарь для транслитерации с учетом регистра
-        translit_dict = {
-            'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'E', 'Ж': 'Zh',
-            'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M', 'Н': 'N', 'О': 'O',
-            'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U', 'Ф': 'F', 'Х': 'Kh', 'Ц': 'Ts',
-            'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Shch', 'Ы': 'Y', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya',
-            'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e', 'ж': 'zh',
-            'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o',
-            'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'kh', 'ц': 'ts',
-            'ч': 'ch', 'ш': 'sh', 'щ': 'shch', 'ы': 'y', 'э': 'e', 'ю': 'yu', 'я': 'ya'
-        }
-
-        # Транслитерация с сохранением регистра
-        transliterated_text = ''.join([translit_dict.get(char, char) for char in text])
-
-        return transliterated_text
 
