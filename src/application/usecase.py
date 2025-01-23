@@ -16,7 +16,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)  
 
 class OzonAdvInfoUseCase:
-    async def get_adv_info_ozon():
+    async def __call__():
         try:
             ozon = OzonApiClient(api_keys=CONFIG.API_KEYS, request=APIClient())
             publisher = EventPublisher(project_id=CONFIG.PROJECT_ID)
@@ -63,6 +63,4 @@ class OzonAdvInfoUseCase:
                     except Exception as e:
                         logger.exception(f"Error publishing for SKU {sku}: {e}")
         except Exception as e:
-            logger.exception(f"Error in get_adv_info_ozon: {e}")
-        finally:
-            logger.info("Ending get_adv_info_ozon.")
+            logger.exception(f"An error occurred: {e}")

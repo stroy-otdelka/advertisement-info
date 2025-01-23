@@ -14,7 +14,8 @@ logger = logging.getLogger(__name__)
 @functions_framework.http
 def run_adv_info(request):
     try:
-        asyncio.run(OzonAdvInfoUseCase.get_adv_info_ozon())
+        usecase = OzonAdvInfoUseCase()
+        asyncio.run(usecase())
         return {"status": "success"}, 200
     except Exception as e:
         logger.exception(f"Error executing run_adv_info: {e}")

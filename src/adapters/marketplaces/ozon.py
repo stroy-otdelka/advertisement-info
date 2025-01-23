@@ -48,7 +48,7 @@ class OzonApiClient(AbstractOzonApiClient):
             await asyncio.sleep(1)
 
         # Получение подробной инфы о продуктах
-        tasks = [self.get_ozon_product(product_id, seller) for product_id in product_id]
+        tasks = [self.get_product(product_id, seller) for product_id in product_id]
         tasks_chunked = [tasks[i:i + 10] for i in range(0, len(tasks), 10)]
         for chunk in tasks_chunked:
             res = await asyncio.gather(*chunk)
@@ -56,7 +56,7 @@ class OzonApiClient(AbstractOzonApiClient):
             await asyncio.sleep(1)
         return result
 
-    async def get_ozon_product(self, vendor_code_wb: str, seller: str) -> dict:
+    async def get_product(self, vendor_code_wb: str, seller: str) -> dict:
         if self._keys[seller].get("ozon") is None:
             return dict()
         vendor_codes = [vendor_code_wb, vendor_code_wb.upper(), self.transliterate(vendor_code_wb)]
