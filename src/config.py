@@ -6,7 +6,7 @@ class Config(BaseSettings):
     LOG_TOPIC: str = "error_logs"
     SERVICE_NAME: str = "price-comparison"
 
-    API_KEYS: dict
+    API_KEYS: dict = {}
 
     model_config = SettingsConfigDict(env_file=".env")
 
