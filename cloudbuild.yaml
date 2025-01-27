@@ -1,0 +1,22 @@
+steps:
+- name: 'gcr.io/cloud-builders/gcloud'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+   gcloud functions deploy check-ozon-adv \
+   --gen2 \
+   --trigger-http \
+   --runtime python312 \
+   --entry-point run_adv_info \
+   --region=europe-west1 \
+   --source=. \
+   --set-env-vars PROJECT_ID=$(gcloud config get-value project) \
+   --memory=1G \
+   --cpu=1 \
+   --min-instances=0 \
+   --max-instances=1 \
+   --vpc-connector=product-card \
+   --timeout=600s
+  dir: '.'
+

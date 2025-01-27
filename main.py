@@ -1,16 +1,24 @@
-# This is a sample Python script.
-
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
-
-
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
+import asyncio
+import functions_framework
+from src.application.usecase import OzonAdvInfoUseCase
+import logging
 
 
-# Press the green button in the gutter to run the script.
-if __name__ == '__main__':
-    print_hi('PyCharm')
 
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+logger = logging.getLogger(__name__)  
+
+@functions_framework.http
+def run_adv_info(request):
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    try:
+        use_case = OzonAdvInfoUseCase()
+        asyncio.run(use_case())
+        return {"status": "success"}, 200
+    except Exception as e:
+        logger.exception(f"Error executing run_adv_info: {e}")
+        return {"status": "error"}, 500
+

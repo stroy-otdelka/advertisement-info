@@ -1,11 +1,12 @@
 import asyncio
 import logging
-from typing import Any
+from typing import Any, TypedDict
 import requests
 from src.application.interfaces.api_client import AbstractOzonApiClient, AbstractApiClient
 
 logger = logging.getLogger(__name__)
 
+ProductADV = TypedDict("ProductADV", {"sku": int,  "adv_id": str | int})
 
 class OzonApiClient(AbstractOzonApiClient):
     def __init__(self, request: AbstractApiClient, api_keys: dict):
@@ -27,28 +28,34 @@ class OzonApiClient(AbstractOzonApiClient):
     async def get_products(self, seller: str) -> list:
         """
         Возвращает все активные продукты с озона
-        docs: https://docs.ozon.ru/api/seller/#operation/ProductAPI_GetProductList
-        docs: https://docs.ozon.ru/api/seller/#operation/ProductAPI_GetProductInfoV2
+        docs: https://docs.ozon.ru/api/seller/#operation/ProductAPI_GetProductListv3
+        docs: https://docs.ozon.ru/api/seller/#operation/ProductAPI_GetProductInfoList
         """
         if self._keys[seller].get("ozon") is None:
             return []
-        product_id = []
+        vendor_codes = []
         result = []
-        body = {"limit": 1000, "last_id": "", "filter": {"visibility": "VISIBLE"}}
+        body = {
+            "limit": 1000,
+            "last_id": "",
+            "filter": {
+                "visibility": "VISIBLE"
+            }
+        }
         while True:
             res = await self._api_client.post(
-                url="https://api-seller.ozon.ru/v2/product/list",
+                url="https://api-seller.ozon.ru/v3/product/list",
                 headers=self._get_headers(seller),
                 json=body
             )
             if not res["result"]["items"]:
                 break
-            product_id.extend(product["offer_id"] for product in res["result"]["items"])
+            vendor_codes.extend(product["offer_id"] for product in res["result"]["items"])
             body["last_id"] = res["result"]["last_id"]
             await asyncio.sleep(1)
 
         # Получение подробной инфы о продуктах
-        tasks = [self.get_product(product_id, seller) for product_id in product_id]
+        tasks = [self.get_ozon_product(vendor_code, seller) for vendor_code in vendor_codes]
         tasks_chunked = [tasks[i:i + 10] for i in range(0, len(tasks), 10)]
         for chunk in tasks_chunked:
             res = await asyncio.gather(*chunk)
@@ -56,19 +63,32 @@ class OzonApiClient(AbstractOzonApiClient):
             await asyncio.sleep(1)
         return result
 
-    async def get_product(self, vendor_code_wb: str, seller: str) -> dict:
+    async def get_ozon_product(self, vendor_code_ozon: str | None, seller: str, sku: int | None = None) -> dict:
         if self._keys[seller].get("ozon") is None:
             return dict()
-        vendor_codes = [vendor_code_wb, vendor_code_wb.upper(), self.transliterate(vendor_code_wb)]
-        for code in vendor_codes:
-            body = {"offer_id": code}
-            res = await self._api_client.post(
-                url="https://api-seller.ozon.ru/v2/product/info", headers=self._get_headers(seller), json=body
-            )
+        if not sku:
+            vendor_codes = [vendor_code_ozon, vendor_code_ozon.upper()]
+            for code in vendor_codes:
+                body = {"offer_id": [code]}
+                res = await self._api_client.post(
+                    url="https://api-seller.ozon.ru/v3/product/info/list",
+                    headers=self._get_headers(seller),
+                    json=body
+                )
 
+                if not res:
+                    continue
+                return res["items"][0]
+        else:
+            body = {"sku": [sku]}
+            res = await self._api_client.post(
+                url="https://api-seller.ozon.ru/v3/product/info/list",
+                headers=self._get_headers(seller),
+                json=body
+            )
             if not res:
-                continue
-            return res["result"]
+                return {}
+            return res["items"][0]
 
         return {}
 
@@ -103,7 +123,7 @@ class OzonApiClient(AbstractOzonApiClient):
 
         return actions['list']
 
-    async def _get_detail_adv(self, seller: str, campaign_id: int, **kwargs: Any) -> list | None:
+    async def _get_detail_adv(self, seller: str, campaign_id: int, **kwargs: Any) -> tuple[list, int] | None:
         """
         Возвращает полные данные определённой рекламной кампании
         """
@@ -112,11 +132,12 @@ class OzonApiClient(AbstractOzonApiClient):
         while True:
             actions = await self._api_client.get(
                 f"https://api-performance.ozon.ru:443/api/client/campaign/{campaign_id}/v2/products",
-                headers={"Authorization": f"Bearer {await self._get_token(seller)}"}
+                headers={"Authorization": f"Bearer {await self._get_token(seller)}"},
+                params={"page": page, "pageSize": 100}
             )
 
             if not actions:
-                return result
+                return [], campaign_id
 
             actions = actions["products"]
             result.extend(actions)
@@ -124,7 +145,7 @@ class OzonApiClient(AbstractOzonApiClient):
                 break
             page += 1
 
-        return result
+        return result, campaign_id
 
     async def _get_all_search_adv(self, seller: str, **kwargs: Any) -> list | None:
         """
@@ -152,30 +173,18 @@ class OzonApiClient(AbstractOzonApiClient):
 
         return result
 
-    async def _get_adv_object_id(self, seller: str, campaign_id: int) -> str:
-        """
-        Возвращает ID рекламируемого объекта для конкретной кампании.
-        """
-        response = await self._api_client.get(
-            f"https://api-performance.ozon.ru:443/api/client/campaign/{campaign_id}/objects",
-            headers={"Authorization": f"Bearer {await self._get_token(seller)}"}
-        )       
-        if response and response.get("list"):
-            return response["list"][0]["id"]
-        return ""
-
-    async def get_adv_info(self, seller: str, **kwargs: Any) -> dict[str, set] | None:
+    async def get_adv_info(self, seller: str, **kwargs: Any) -> list[ProductADV] | None:
         """
         Возвращает все артикулы товаров, 
         которые в активных рекламных компаниях (Трафарет и продвижение в поиске)
         и айди рекламируемного объекта
         """
         if self._keys[seller].get("ozon") is None:
-            return dict()
-        
-        sku_ads_campaigns = await self._get_all_adv(seller)
-        result = {"sku": set(), "search": set(), "adv_id": ""}
+            return []
 
+        sku_ads_campaigns = await self._get_all_adv(seller)
+        result = []
+        # rk_object = {"sku": int,  "adv_id": ""}
         tasks = []
         api_interaction_limit = 5
         for index in range(0, len(sku_ads_campaigns), api_interaction_limit):
@@ -187,17 +196,13 @@ class OzonApiClient(AbstractOzonApiClient):
         for task_group in tasks:
             batch_result = await asyncio.gather(*task_group)
             for campaign in batch_result:
-                for product in campaign:
-                    result["sku"].add(int(product['sku']))
-            await asyncio.sleep(1)
+                for product in campaign[0]:
+                    result.append({"sku": int(product['sku']), "adv_id": campaign[1]})
 
         search_ads = await self._get_all_search_adv(seller)
 
         for search_ad in search_ads:
-            result["search"].add(int(search_ad['sku']))
-
-        if sku_ads_campaigns:
-            result["adv_id"] = await self._get_adv_object_id(seller, sku_ads_campaigns[0]["id"])
+            result.append({"sku": int(search_ad['sku']), "adv_id": "Продвижение в поиске"})
 
         return result
 
@@ -230,3 +235,17 @@ class OzonApiClient(AbstractOzonApiClient):
                 return res.get("supply_order_id", [])
             body["paging"]["from_supply_order_id"] = res["last_supply_order_id"]
 
+    async def check_stock(
+            self,
+            seller: str,
+            sku: int | None = None,
+            vendor_code_ozon: str | None = None
+    ) -> bool:
+        product = await self.get_ozon_product(
+            sku=sku,
+            seller=seller,
+            vendor_code_ozon=vendor_code_ozon
+        )
+        if not product:
+            return False
+        return product["stocks"]["has_stock"]

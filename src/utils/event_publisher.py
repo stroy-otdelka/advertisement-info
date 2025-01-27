@@ -1,5 +1,6 @@
 import json
 import logging
+from dataclasses import asdict
 
 from google.cloud import pubsub_v1
 
@@ -32,7 +33,7 @@ class EventPublisher(AbstractEventPublisher):
     def _registration(self, event: events.Event, topic: str, **kwargs) -> str:
         try:
             topic_path = self.publisher.topic_path(self.project_id, topic)
-            encode_event_event = json.dumps(event.to_dict(), indent=2).encode("utf-8")
+            encode_event_event = json.dumps(asdict(event), indent=2).encode("utf-8")  # noqa
             logging.info(f"publish - {encode_event_event}")
             res = self.publisher.publish(topic=topic_path, data=encode_event_event, **kwargs)
             id = res.result(timeout=30)

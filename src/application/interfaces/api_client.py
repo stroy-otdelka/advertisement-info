@@ -57,7 +57,7 @@ class AbstractOzonApiClient(ABC):
         """
 
     @abstractmethod
-    async def get_ozon_product(self, vendor_code_wb: str, seller: str) -> dict:
+    async def get_ozon_product(self, vendor_code_ozon: str | None, seller: str, sku: int | None = None) -> dict:
         raise NotImplementedError
 
     @abstractmethod
